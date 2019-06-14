@@ -7,3 +7,8 @@
 
 # .tfvars files
 *.tfvars
+
+*.swp
+
+key_pair
+key_pair.pub
