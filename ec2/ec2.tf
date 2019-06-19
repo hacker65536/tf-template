@@ -1,35 +1,24 @@
 locals {
   instance_type = "t2.micro"
 }
-data "aws_ami" "amazonlinux2" {
-  most_recent = true
 
-  filter {
-    name   = "name"
-    values = ["amzn2-ami-hvm-2.0.20*x86_64-gp2"]
+locals {
+  os = {
+    amz2     = data.aws_ami.amazonlinux2.id
+    amz      = data.aws_ami.amazonlinux.id
+    cent7    = data.aws_ami.centos7.id
+    cent6    = data.aws_ami.centos6.id
+    ubuntu18 = data.aws_ami.ubuntu18.id
   }
-
-  filter {
-    name   = "virtualization-type"
-    values = ["hvm"]
-  }
-
-  filter {
-    name   = "block-device-mapping.volume-type"
-    values = ["gp2"]
-  }
-
-  owners = ["amazon"]
 }
-
 resource "aws_instance" "ec2" {
-  instance_type = local.instance_type
-  key_name      = aws_key_pair.key_pair.key_name
-  ami           = data.aws_ami.amazonlinux2.id
-
-  subnet_id = ""
-
-  volume_tags = local.tags
+  count                  = length(local.os)
+  instance_type          = local.instance_type
+  key_name               = aws_key_pair.key_pair.key_name
+  ami                    = element(values(local.os), count.index)
+  subnet_id              = tolist(data.aws_subnet_ids.pub.ids)[0]
+  vpc_security_group_ids = [data.aws_security_group.def.id]
+  volume_tags            = local.tags
 
   root_block_device {
     volume_type           = "gp2"
@@ -39,7 +28,18 @@ resource "aws_instance" "ec2" {
 
   tags = merge(
     local.tags,
-    map("Name", "${terraform.workspace}-ec2"),
+    map("Name", "${terraform.workspace}-${element(keys(local.os), count.index)}"),
   )
 }
 
+
+output "sub" {
+  value = tolist(data.aws_subnet_ids.pub.ids)[0]
+}
+output "ips" {
+  #  value = aws_instance.ec2[*].private_ip
+  value = {
+    for inst in aws_instance.ec2 :
+    inst.tags["Name"] => inst.private_ip
+  }
+}
